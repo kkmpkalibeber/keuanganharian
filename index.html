@@ -912,19 +912,19 @@
         }
 
         function formatDateForPDF(dateString) {
-            if (!dateString) return '-';
-            try {
-                const date = new Date(dateString);
-                if (isNaN(date.getTime())) return dateString;
-                return date.toLocaleDateString('id-ID', {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric'
-                });
-            } catch (e) {
-                return dateString;
-            }
-        }
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('id-ID', {
+            day: '2-digit',
+            month: 'short',  // "short" = "Des" bukan "Desember"
+            year: 'numeric'
+        });
+    } catch (e) {
+        return dateString; // fallback ke string asli
+    }
+}
+        
+      
 
         function showAlert(elementId, message, type = 'success') {
             const alertElement = document.getElementById(elementId);
@@ -1495,18 +1495,16 @@ function exportToPDF() {
     const margin = 15;
     let yPos = 20;
     
-    // Title
+    // === TITLE ===
     doc.setFontSize(20);
-    doc.setTextColor(44, 62, 80); // Dark blue
+    doc.setTextColor(44, 62, 80);
     doc.text('LAPORAN KEUANGAN', pageWidth / 2, yPos, { align: 'center' });
     
-    // Subtitle
     yPos += 10;
     doc.setFontSize(12);
-    doc.setTextColor(127, 140, 141); // Gray
+    doc.setTextColor(127, 140, 141);
     doc.text('UangUmu - Aplikasi Keuangan Pribadi', pageWidth / 2, yPos, { align: 'center' });
     
-    // Date
     yPos += 8;
     doc.setFontSize(10);
     doc.text(`Dibuat pada: ${new Date().toLocaleDateString('id-ID', { 
@@ -1517,44 +1515,72 @@ function exportToPDF() {
         minute: '2-digit'
     })}`, pageWidth / 2, yPos, { align: 'center' });
     
-    // Summary Section
+    // === SUMMARY SECTION ===
     yPos += 20;
     doc.setFontSize(14);
     doc.setTextColor(44, 62, 80);
     doc.text('RINGKASAN KEUANGAN', margin, yPos);
     
     yPos += 10;
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
     
     // Summary Box
     doc.setFillColor(248, 249, 250);
     doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 40, 'F');
     
+    // Hitung total sebelum render
+    const sortedTransactions = [...transactions].sort((a, b) => {
+        return new Date(a.Tanggal) - new Date(b.Tanggal);
+    });
+    
+    // Hitung saldo berjalan
+    let runningBalance = 0;
+    const transactionsWithBalance = sortedTransactions.map(transaction => {
+        const nilai = parseInt(transaction.Nilai) || 0;
+        if (transaction.Jenis === 'masuk') {
+            runningBalance += nilai;
+        } else {
+            runningBalance -= nilai;
+        }
+        return {
+            ...transaction,
+            Saldo: runningBalance
+        };
+    });
+    
+    const totalIncome = sortedTransactions
+        .filter(t => t.Jenis === 'masuk')
+        .reduce((sum, t) => sum + (parseInt(t.Nilai) || 0), 0);
+    
+    const totalExpense = sortedTransactions
+        .filter(t => t.Jenis === 'keluar')
+        .reduce((sum, t) => sum + (parseInt(t.Nilai) || 0), 0);
+    
+    const currentBalance = totalIncome - totalExpense;
+    
     // Balance
     doc.setFontSize(12);
-    doc.setTextColor(52, 152, 219); // Blue
+    doc.setTextColor(52, 152, 219);
     doc.text('SALDO AKHIR', margin + 5, yPos + 5);
     doc.setFontSize(16);
     doc.text(formatRupiah(currentBalance), margin + 5, yPos + 12);
     
     // Income
     doc.setFontSize(12);
-    doc.setTextColor(46, 204, 113); // Green
+    doc.setTextColor(46, 204, 113);
     doc.text('TOTAL PEMASUKAN', pageWidth / 2, yPos + 5);
     doc.setFontSize(16);
     doc.text(formatRupiah(totalIncome), pageWidth / 2, yPos + 12);
     
     // Expense
     doc.setFontSize(12);
-    doc.setTextColor(231, 76, 60); // Red
+    doc.setTextColor(231, 76, 60);
     doc.text('TOTAL PENGELUARAN', pageWidth - margin - 5, yPos + 5, { align: 'right' });
     doc.setFontSize(16);
     doc.text(formatRupiah(totalExpense), pageWidth - margin - 5, yPos + 12, { align: 'right' });
     
     yPos += 50;
     
-    // Transaction Details Title
+    // === TRANSACTION TABLE ===
     doc.setFontSize(14);
     doc.setTextColor(44, 62, 80);
     doc.text('DETAIL TRANSAKSI (Per Baris)', margin, yPos);
@@ -1565,24 +1591,14 @@ function exportToPDF() {
         doc.setTextColor(127, 140, 141);
         doc.text('Tidak ada data transaksi', pageWidth / 2, yPos + 10, { align: 'center' });
     } else {
-        // URUTKAN DARI TERLAMA KE TERBARU
-        const sortedTransactions = [...transactions].sort((a, b) => {
-            return new Date(a.Tanggal) - new Date(b.Tanggal);
-        });
-        
-        // Table Header
-        doc.setFontSize(10);
-        doc.setTextColor(255, 255, 255);
-        doc.setFillColor(44, 62, 80); // Dark blue header
-        
-        // Header positions
+        // PERBAIKAN LEBAR KOLOM
         const colWidths = {
-            no: 10,
-            tanggal: 25,
+            no: 12,           // dari 10 → 12
+            tanggal: 35,      // dari 25 → 35 (LEBIH LEBAR!)
             pemasukan: 35,
             pengeluaran: 35,
             saldo: 35,
-            keterangan: 50
+            keterangan: pageWidth - 2 * margin - 147 // hitung sisanya
         };
         
         const colPositions = {
@@ -1594,10 +1610,12 @@ function exportToPDF() {
             keterangan: margin + colWidths.no + colWidths.tanggal + colWidths.pemasukan + colWidths.pengeluaran + colWidths.saldo
         };
         
-        // Draw header background
+        // Header
+        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.setFillColor(44, 62, 80);
         doc.rect(margin, yPos, pageWidth - 2 * margin, 8, 'F');
         
-        // Header text
         doc.text('No', colPositions.no + 3, yPos + 6);
         doc.text('Tanggal', colPositions.tanggal + 3, yPos + 6);
         doc.text('Pemasukan', colPositions.pemasukan + 3, yPos + 6);
@@ -1607,29 +1625,28 @@ function exportToPDF() {
         
         yPos += 10;
         
-        // Transaction rows
-        let rowHeight = 8;
         let page = 1;
+        const rowHeight = 8;
         
-        sortedTransactions.forEach((transaction, index) => {
-            // Check if need new page
-            if (yPos > doc.internal.pageSize.height - 20) {
+        // PERBAIKAN: Gunakan transactionsWithBalance
+        transactionsWithBalance.forEach((transaction, index) => {
+            // Check new page
+            if (yPos > doc.internal.pageSize.height - 30) {
                 doc.addPage();
                 yPos = 20;
                 page++;
                 
-                // Add page header
+                // Page header
                 doc.setFontSize(12);
                 doc.setTextColor(44, 62, 80);
                 doc.text(`Laporan Keuangan - Halaman ${page}`, pageWidth / 2, 15, { align: 'center' });
                 
-                // Draw header background for new page
+                // Table header for new page
+                doc.setFontSize(10);
+                doc.setTextColor(255, 255, 255);
                 doc.setFillColor(44, 62, 80);
                 doc.rect(margin, yPos, pageWidth - 2 * margin, 8, 'F');
                 
-                // Header text for new page
-                doc.setFontSize(10);
-                doc.setTextColor(255, 255, 255);
                 doc.text('No', colPositions.no + 3, yPos + 6);
                 doc.text('Tanggal', colPositions.tanggal + 3, yPos + 6);
                 doc.text('Pemasukan', colPositions.pemasukan + 3, yPos + 6);
@@ -1646,120 +1663,114 @@ function exportToPDF() {
                 doc.rect(margin, yPos, pageWidth - 2 * margin, rowHeight, 'F');
             }
             
-            // Row data
+            // No
             doc.setFontSize(9);
             doc.setTextColor(0, 0, 0);
-            
-            // No
             doc.text((index + 1).toString(), colPositions.no + 3, yPos + 6);
             
-            // Tanggal
-            doc.text(formatDateForPDF(transaction.Tanggal), colPositions.tanggal + 3, yPos + 6);
+            // Tanggal (format lebih pendek)
+            const tanggal = new Date(transaction.Tanggal);
+            const formattedDate = tanggal.toLocaleDateString('id-ID', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            });
+            doc.text(formattedDate, colPositions.tanggal + 3, yPos + 6);
             
-            // Pemasukan (hanya jika jenis "masuk")
+            // FIX: WARNA YANG BENAR
             if (transaction.Jenis === 'masuk') {
+                // Pemasukan: hijau, Pengeluaran: "-" dengan warna hitam
                 doc.setTextColor(46, 204, 113); // Green
                 doc.text(formatRupiah(transaction.Nilai), colPositions.pemasukan + 3, yPos + 6);
-                doc.setTextColor(231, 76, 60); // Red (for empty pengeluaran)
+                doc.setTextColor(0, 0, 0); // Hitam untuk "-"
                 doc.text('-', colPositions.pengeluaran + 3, yPos + 6);
             } else {
-                // Pengeluaran (hanya jika jenis "keluar")
-                doc.setTextColor(231, 76, 60); // Red (for empty pemasukan)
+                // Pemasukan: "-" dengan warna hitam, Pengeluaran: merah
+                doc.setTextColor(0, 0, 0); // Hitam untuk "-"
                 doc.text('-', colPositions.pemasukan + 3, yPos + 6);
-                doc.setTextColor(46, 204, 113); // Green
+                doc.setTextColor(231, 76, 60); // Red
                 doc.text(formatRupiah(transaction.Nilai), colPositions.pengeluaran + 3, yPos + 6);
             }
             
-            // Reset text color for other columns
-            doc.setTextColor(0, 0, 0);
-            
-            // Saldo
+            // Saldo (warna berdasarkan positif/negatif)
             doc.setFontSize(9);
             doc.setFont(undefined, 'bold');
-            doc.text(formatRupiah(transaction.Saldo || 0), colPositions.saldo + 3, yPos + 6);
-            doc.setFont(undefined, 'normal');
             
-            // Keterangan
+            if (transaction.Saldo >= 0) {
+                doc.setTextColor(46, 204, 113); // Hijau jika positif
+            } else {
+                doc.setTextColor(231, 76, 60); // Merah jika negatif
+            }
+            
+            doc.text(formatRupiah(transaction.Saldo), colPositions.saldo + 3, yPos + 6);
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(0, 0, 0); // Reset ke hitam
+            
+            // Keterangan (dengan truncate)
             const keterangan = transaction.Keterangan || '-';
-            // Truncate if too long
-            const maxKeteranganLength = 40;
-            const displayKeterangan = keterangan.length > maxKeteranganLength 
-                ? keterangan.substring(0, maxKeteranganLength) + '...' 
+            const maxChars = Math.floor(colWidths.keterangan / 2); // approx chars that fit
+            const displayKeterangan = keterangan.length > maxChars 
+                ? keterangan.substring(0, maxChars - 3) + '...' 
                 : keterangan;
             doc.text(displayKeterangan, colPositions.keterangan + 3, yPos + 6);
             
             yPos += rowHeight + 2;
         });
         
-        // Draw horizontal line after table
-        doc.setDrawColor(200, 200, 200);
-        doc.line(margin, yPos, pageWidth - margin, yPos);
-        
-        yPos += 5;
-        
         // Summary after table
+        yPos += 10;
         doc.setFontSize(10);
         doc.setTextColor(44, 62, 80);
+        doc.setFont(undefined, 'bold');
         doc.text('REKAP:', margin, yPos);
+        doc.setFont(undefined, 'normal');
         
         yPos += 7;
         
-        // Pemasukan total
-        doc.setTextColor(46, 204, 113); // Green
+        doc.setTextColor(46, 204, 113);
         doc.text('Total Pemasukan:', margin, yPos);
         doc.text(formatRupiah(totalIncome), colPositions.pemasukan + 3, yPos);
         
-        // Pengeluaran total
-        doc.setTextColor(231, 76, 60); // Red
-        doc.text('Total Pengeluaran:', margin + 50, yPos);
+        doc.setTextColor(231, 76, 60);
+        doc.text('Total Pengeluaran:', margin + colWidths.pemasukan, yPos);
         doc.text(formatRupiah(totalExpense), colPositions.pengeluaran + 3, yPos);
         
         yPos += 7;
         
-        // Saldo akhir
-        doc.setTextColor(52, 152, 219); // Blue
+        doc.setTextColor(52, 152, 219);
         doc.setFont(undefined, 'bold');
         doc.text('Saldo Akhir:', margin, yPos);
         doc.text(formatRupiah(currentBalance), colPositions.saldo + 3, yPos);
-        doc.setFont(undefined, 'normal');
     }
     
-    // Footer on every page
+    // Footer
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         
-        // Footer line
         doc.setDrawColor(200, 200, 200);
         doc.line(margin, doc.internal.pageSize.height - 20, pageWidth - margin, doc.internal.pageSize.height - 20);
         
-        // Footer text
         doc.setFontSize(8);
         doc.setTextColor(127, 140, 141);
         
-        // Left footer
         doc.text(`Halaman ${i} dari ${pageCount}`, margin, doc.internal.pageSize.height - 15);
-        
-        // Center footer
         doc.text('© 2024 UangUmu - Laporan Keuangan Pribadi', 
                 pageWidth / 2, 
                 doc.internal.pageSize.height - 15, 
                 { align: 'center' });
-        
-        // Right footer
         doc.text(`Total Transaksi: ${transactions.length}`, 
                 pageWidth - margin, 
                 doc.internal.pageSize.height - 15, 
                 { align: 'right' });
     }
     
-    // Save PDF
+    // Save
     const fileName = `Laporan-Keuangan-${new Date().toISOString().split('T')[0]}.pdf`;
     doc.save(fileName);
     
     showAlert('table-alert', 'Laporan PDF berhasil diunduh!', 'success');
 }
-
 
         // =========== UTILITY FUNCTIONS ===========
         function refreshData() {
@@ -1815,5 +1826,6 @@ function exportToPDF() {
     </script>
 </body>
 </html>
+
 
 
