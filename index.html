@@ -1732,7 +1732,7 @@ function exportToPDF() {
         doc.text(formatRupiah(totalIncome), colPositions.pemasukan + 3, yPos);
         
         doc.setTextColor(231, 76, 60);
-        doc.text('Total Pengeluaran:', margin + colWidths.pemasukan, yPos);
+        doc.text('Total Pengeluaran:', margin + 60, yPos);
         doc.text(formatRupiah(totalExpense), colPositions.pengeluaran + 3, yPos);
         
         yPos += 7;
@@ -1826,6 +1826,7 @@ function exportToPDF() {
     </script>
 </body>
 </html>
+
 
 
 
