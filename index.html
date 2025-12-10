@@ -1728,11 +1728,11 @@ function exportToPDF() {
         yPos += 7;
         
         doc.setTextColor(46, 204, 113);
-        doc.text('Total Pemasukan:', margin, yPos);
+        doc.text('Jml Pemasukan:', margin, yPos);
         doc.text(formatRupiah(totalIncome), colPositions.pemasukan + 3, yPos);
         
         doc.setTextColor(231, 76, 60);
-        doc.text('Total Pengeluaran:', margin + 60, yPos);
+        doc.text('Jml Pengeluaran:', margin + 90, yPos);
         doc.text(formatRupiah(totalExpense), colPositions.pengeluaran + 3, yPos);
         
         yPos += 7;
@@ -1826,6 +1826,7 @@ function exportToPDF() {
     </script>
 </body>
 </html>
+
 
 
 
